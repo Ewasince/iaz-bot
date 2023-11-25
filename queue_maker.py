@@ -5,29 +5,25 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
+from enums import Mark
 from errors import EmptyList
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# The ID and range of a sample sp
-#
-# readsheet.
-SAMPLE_RANGE_NAME = "A2:E2"
-
 StudentAndTheme = tuple[str, str, str]
+COUNT_STUDENT_FIELDS = 3  # count str in StudentAndTheme
+RangeDict = dict[str, str]
 
 
 class SheetWrapper:
-
-    def __init__(self, sheet_id: str, use_titles=True):
+    def __init__(self, sheet_id: str, use_titles=True, list_name=None, list_id=0):
         self.sheet_id = sheet_id
-        self.start_row = 2 if use_titles else 1
-        """Shows basic usage of the Sheets API.
-           Prints values from a sample spreadsheet.
-           """
+        self.start_row_idx = 1 if use_titles else 0
+        self._student_num = 0
+
+        # set up connection
         creds = None
         # The file token.json stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
@@ -49,45 +45,43 @@ class SheetWrapper:
 
         service = build("sheets", "v4", credentials=creds)
 
+        # sheet
         self.sheet = service.spreadsheets()
-        pass
 
-    def get_sheet_lists(self) -> list[str]:
+        self.main_list_id = 0
+
+    def get_sheet_lists_titles(self) -> list[str]:
         """
         0 – first main list
         :return:
         """
 
         spreadsheet = self.sheet.get(spreadsheetId=self.sheet_id).execute()
-        sheet_list = spreadsheet.get('sheets')
-        sheet_list = [s['properties']['title'] for s in sheet_list]
-        # sheet_dict = {s['properties']['title'] : n for n, s in enumerate(sheet_list)}
-        # for sheet in sheet_list:
-        #     print(, sheet['properties']['title'])
+        sheet_list = spreadsheet.get("sheets")
+        sheet_list = [s["properties"]["title"] for s in sheet_list]
         return sheet_list
 
-    def get_students_from_list(self, list_name: str) -> list[StudentAndTheme]:
-        range = f"{list_name}!A{self.start_row}:B100"
+    def get_students_sheets(self):
+        return self.get_sheet_lists_titles()[1:]
 
-        result = (
-            self.sheet.values()
-            .get(spreadsheetId=self.sheet_id, range=range)
-            .execute()
-        )
-        # student s
-        # theme t
-        # group g
-        g = list_name
-        try:
-            result = result["values"]
-        except KeyError:
-            raise EmptyList(list_name)
+    def get_students_from_list(self, list_title: str) -> list[StudentAndTheme]:
+        start_col, start_row = 0, self.start_row_idx
+        end_col, end_row = 1, 100
+        range = self._generate_range(start_col, start_row, end_col, end_row)
 
+        result = self._read_cells(range, list_title=list_title)
+
+        # student -> s
+        # theme -> t
+        # group -> g
+        g = list_title
         result = [(s, t, g) for s, t in result]
 
         return result
 
-    def shuffle_students(self, list_groups: list[list[StudentAndTheme]]) -> list[StudentAndTheme]:
+    def shuffle_students(
+        self, list_groups: list[list[StudentAndTheme]]
+    ) -> list[StudentAndTheme]:
         queue: list[StudentAndTheme] = list()
 
         for current_students in itertools.zip_longest(*list_groups):
@@ -98,48 +92,175 @@ class SheetWrapper:
 
         return queue
 
-    def write_query(self, queue: list[StudentAndTheme], list_name=None, list_id=0):
+    def write_queue(self, queue: list[StudentAndTheme]):
+        """Записывает очередь в табLицу"""
+        print(f"Запись в лист {self.main_list_id}")
 
-        spreadsheet = self.sheet.get(spreadsheetId=self.sheet_id).execute()
-        sheet_list = spreadsheet.get('sheets')
-        if list_name is None:
-            list_name = sheet_list[list_id]['properties']['title']
+        start_col, start_row = 0, self.start_row_idx
+        end_col, end_row = COUNT_STUDENT_FIELDS, len(queue) + self.start_row_idx
 
-        print(f"Запись в лист {list_name}")
+        range = self._generate_range(start_col, start_row, end_col, end_row)
 
-        results = self.sheet.values().batchUpdate(spreadsheetId=self.sheet_id, body={
-            "valueInputOption": "RAW",
-            # Данные воспринимаются, как сырые (не считается значение формул)
-            "data": [
-                {"range": f"{list_name}!A{self.start_row}:C{len(queue)}",
-                 "majorDimension": "ROWS",  # Сначала заполнять строки, затем столбцы
-                 "values": queue
-                 }
-            ]
-        }).execute()
+        self._write_cells(range, queue, is_single=False)
 
+    def get_next_student(self, offset: int = 0) -> StudentAndTheme | None:
+        student_num = self._student_num + offset
+        range = self._get_student_range(student_num)
+
+        try:
+            result = self._read_cells(range)
+            result = result[0]
+        except (EmptyList, KeyError) as e:
+            return None
+        result = result[:COUNT_STUDENT_FIELDS]
+
+        return result
+
+    def mark_current_student(self, mark: Mark, comment: str = None):
+        print(f"Запись в лист {self.main_list_id}")
+
+        range = self._get_student_mark_range(self._student_num)
+
+        color = mark.value
+
+        if comment is not None:
+            self._write_cells(range, comment)
+
+        self._update_cell_color(range, *color)
+
+    def set_queue(self, idx=0):
+        self._student_num = idx
+
+    def increment_queue(self):
+        self._student_num += 1
+
+    ########################### range func ->
+
+    def _convert_to_a1(self, range, list_title=None):
+        s_col = int(range["startColumnIndex"])
+        s_row = int(range["startRowIndex"])
+        e_col = int(range["endColumnIndex"])
+        e_row = int(range["endRowIndex"])
+
+        #         name = self.sheet_list[name]
+        s_col = chr(s_col + 65)
+        s_row += 1
+        e_col = chr(e_col + 65)
+        e_row += 1
+
+        range = f"{s_col}{s_row}:{e_col}{e_row}"
+
+        if list_title is not None:
+            return f"{list_title}!{range}"
+        else:
+            return f"{range}"
+
+    def _get_student_range(self, student_num) -> RangeDict:
+        start_row, end_row = (
+            student_num + self.start_row_idx,
+            student_num + self.start_row_idx,
+        )
+        start_col, end_col = 0, COUNT_STUDENT_FIELDS
+
+        return self._generate_range(start_col, start_row, end_col, end_row)
+
+    def _get_student_mark_range(self, student_num) -> RangeDict:
+        start_row, end_row = (
+            student_num + self.start_row_idx,
+            student_num + self.start_row_idx + 1,
+        )
+        start_col, end_col = COUNT_STUDENT_FIELDS, COUNT_STUDENT_FIELDS + 1
+
+        return self._generate_range(start_col, start_row, end_col, end_row)
+
+    def _generate_range(self, start_col, start_row, end_col, end_row) -> RangeDict:
+        range = {
+            "sheetId": self.main_list_id,
+            "startColumnIndex": start_col,
+            "startRowIndex": start_row,
+            "endColumnIndex": end_col,
+            "endRowIndex": end_row,
+        }
+        return range
+
+    ########################### range func <-
+
+    ########################### requests func ->
+
+    def _update_cell_color(self, range: RangeDict, red, green, blue):
+        self.sheet.batchUpdate(
+            spreadsheetId=self.sheet_id,
+            body={
+                "requests": [
+                    {
+                        "repeatCell": {
+                            "cell": {
+                                "userEnteredFormat": {
+                                    "backgroundColor": {
+                                        "red": red,
+                                        "green": green,
+                                        "blue": blue,
+                                    }
+                                }
+                            },
+                            "range": range,
+                            "fields": "userEnteredFormat",
+                        }
+                    }
+                ]
+            },
+        ).execute()
+
+    def _gen_get_values_request(self, range: RangeDict, value) -> dict:
+        req = {
+            "updateCells": {
+                "range": range,
+                "rows": [[value]],
+                "fields": "userEnteredValue",
+            }
+        }
+        return req
+
+    def _write_cells(self, range: RangeDict, value, is_single=True):
+        if is_single:
+            value = [[value]]
+
+        range = self._convert_to_a1(range)
+
+        results = (
+            self.sheet.values()
+            .batchUpdate(
+                spreadsheetId=self.sheet_id,
+                body={
+                    "valueInputOption": "RAW",
+                    # Данные воспринимаются, как сырые (не считается значение формул)
+                    "data": [
+                        {
+                            "range": range,
+                            "majorDimension": "ROWS",  # Сначала заполнять строки, затем столбцы
+                            "values": value,
+                        }
+                    ],
+                },
+            )
+            .execute()
+        )
         return results
 
-    def main(self):
+    def _read_cells(self, range: RangeDict, list_title: str = None) -> list:
+        range = self._convert_to_a1(range, list_title=list_title)
+
+        result = (
+            self.sheet.values().get(spreadsheetId=self.sheet_id, range=range).execute()
+        )
         try:
-            # Call the Sheets API
-            result = (
-                self.sheet.values()
-                .get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME)
-                .execute()
-            )
-            values = result.get("values", [])
+            result = result["values"]
+        except KeyError:
+            raise EmptyList(list_title or "<First list>")
 
-            if not values:
-                print("No data found.")
-                return
+        return result
 
-            print("Name, Major:")
-            for row in values:
-                # Print columns A and E, which correspond to indices 0 and 4.
-                print(f"{row[0]}, {row[4]}")
-        except HttpError as err:
-            print(err)
+    ########################### requests func <-
 
 
 if __name__ == "__main__":
@@ -147,8 +268,7 @@ if __name__ == "__main__":
 
     s = SheetWrapper(SAMPLE_SPREADSHEET_ID)
 
-    lists = s.get_sheet_lists()
-    lists_with_students = lists[1:]
+    lists_with_students = s.get_students_sheets()
 
     groups_list = []
 
@@ -161,10 +281,55 @@ if __name__ == "__main__":
         groups_list.append(st_list)
 
     quque = s.shuffle_students(groups_list)
+    s.write_queue(quque)
 
-    for q in quque:
-        print(q)
+    print("Записаны студенты")
 
-    s.write_query(quque)
+    # test data
+    marks = [
+        Mark.good,
+        Mark.good,
+        Mark.good,
+        Mark.good,
+        Mark.good,
+        Mark.middle,
+        Mark.middle,
+        Mark.middle,
+        Mark.middle,
+        Mark.bad,
+        Mark.nothing,
+        Mark.nothing,
+    ]
+    comments = [
+        "доработать проект",
+        "возьму на заметку",
+        "молодец!",
+        "недожал",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ]
 
-    # print(quque)
+    # process imitation
+    import random
+    next_st = s.get_next_student()
+    while next_st is not None:
+        cur_st = next_st
+        next_st = s.get_next_student(1)
+
+        print(f"Рассказывает студент: {cur_st}")
+        if next_st:
+            print(f"Готовится студент: {next_st}")
+
+        mark = random.choice(marks)
+        s.mark_current_student(mark, comment=random.choice(comments))
+        print(f"Поставлена оценка: {mark}")
+        s.increment_queue()
+
+    pass
