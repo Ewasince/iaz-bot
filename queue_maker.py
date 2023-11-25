@@ -22,8 +22,9 @@ StudentAndTheme = tuple[str, str, str]
 
 class SheetWrapper:
 
-    def __init__(self, sheet_id: str):
+    def __init__(self, sheet_id: str, use_titles=True):
         self.sheet_id = sheet_id
+        self.start_row = 2 if use_titles else 1
         """Shows basic usage of the Sheets API.
            Prints values from a sample spreadsheet.
            """
@@ -49,6 +50,7 @@ class SheetWrapper:
         service = build("sheets", "v4", credentials=creds)
 
         self.sheet = service.spreadsheets()
+        pass
 
     def get_sheet_lists(self) -> list[str]:
         """
@@ -65,16 +67,7 @@ class SheetWrapper:
         return sheet_list
 
     def get_students_from_list(self, list_name: str) -> list[StudentAndTheme]:
-        range = f"{list_name}!A1:B100"
-        # spreadsheet = self.sheet.get(spreadsheetId=self.sheet_id).execute()
-        # sheet_list = spreadsheet.get('sheets')
-        # sheet_dict = {s['properties']['title'] : n for n, s in enumerate(sheet_list)}
-        # for sheet in sheet_list:
-        #     print(, sheet['properties']['title'])
-
-        # sheetId = sheet_list[0]['properties']['sheetId']
-
-        # print('Мы будем использовать лист с Id = ', sheetId)
+        range = f"{list_name}!A{self.start_row}:B100"
 
         result = (
             self.sheet.values()
@@ -104,6 +97,28 @@ class SheetWrapper:
                 queue.append(current_student)
 
         return queue
+
+    def write_query(self, queue: list[StudentAndTheme], list_name=None, list_id=0):
+
+        spreadsheet = self.sheet.get(spreadsheetId=self.sheet_id).execute()
+        sheet_list = spreadsheet.get('sheets')
+        if list_name is None:
+            list_name = sheet_list[list_id]['properties']['title']
+
+        print(f"Запись в лист {list_name}")
+
+        results = self.sheet.values().batchUpdate(spreadsheetId=self.sheet_id, body={
+            "valueInputOption": "RAW",
+            # Данные воспринимаются, как сырые (не считается значение формул)
+            "data": [
+                {"range": f"{list_name}!A{self.start_row}:C{len(queue)}",
+                 "majorDimension": "ROWS",  # Сначала заполнять строки, затем столбцы
+                 "values": queue
+                 }
+            ]
+        }).execute()
+
+        return results
 
     def main(self):
         try:
@@ -149,5 +164,7 @@ if __name__ == "__main__":
 
     for q in quque:
         print(q)
+
+    s.write_query(quque)
 
     # print(quque)
