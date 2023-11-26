@@ -131,8 +131,8 @@ class SheetWrapper:
     def set_queue(self, idx=0):
         self._student_num = idx
 
-    def increment_queue(self):
-        self._student_num += 1
+    def increment_queue(self, count: int = 1):
+        self._student_num += count
 
     ########################### range func ->
 
