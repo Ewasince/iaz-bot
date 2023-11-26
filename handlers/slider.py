@@ -12,20 +12,22 @@ router = Router()
 SAMPLE_SPREADSHEET_ID = "120kLLJRpbZjQofJuPbbB-VtvebMQzG6GLBV24FZGO58"
 
 
-@router.callback_query(F.data == 'next_student')
-async def process_callback_next_student(callback_query: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "next_student")
+async def process_callback_next_student(
+    callback_query: CallbackQuery, state: FSMContext
+):
     s = SheetWrapper(SAMPLE_SPREADSHEET_ID)
 
     state_date = await state.get_data()
 
-    await state.update_data(id=state_date['id'] + 1)
+    await state.update_data(id=state_date["id"] + 1)
 
-    curr_student = s.get_next_student(state_date['id'] + 1)
+    curr_student = s.get_next_student(state_date["id"] + 1)
 
     if curr_student is None:
         await state.clear()
         await callback_query.message.edit_text(
-            text='Очередь закончилась',
+            text="Очередь закончилась",
             reply_markup=main_markup,
         )
         return
@@ -36,23 +38,25 @@ async def process_callback_next_student(callback_query: CallbackQuery, state: FS
 Группа: {curr_student[2]}
 № Темы {curr_student[1]}
     """,
-        reply_markup=student_card
+        reply_markup=student_card,
     )
 
 
-@router.callback_query(F.data == 'previous_student')
-async def process_callback_previous_student(callback_query: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "previous_student")
+async def process_callback_previous_student(
+    callback_query: CallbackQuery, state: FSMContext
+):
     s = SheetWrapper(SAMPLE_SPREADSHEET_ID)
 
     state_date = await state.get_data()
 
-    if state_date['id'] >= 1:
-        await state.update_data(id=state_date['id'] - 1)
-        curr_student = s.get_next_student(state_date['id'] - 1)
+    if state_date["id"] >= 1:
+        await state.update_data(id=state_date["id"] - 1)
+        curr_student = s.get_next_student(state_date["id"] - 1)
 
         if curr_student is None:
             await callback_query.message.edit_text(
-                text='Очередь закончилась',
+                text="Очередь закончилась",
                 reply_markup=main_markup,
             )
 
@@ -62,27 +66,30 @@ async def process_callback_previous_student(callback_query: CallbackQuery, state
 Группа: {curr_student[2]}
 № Темы {curr_student[1]}
             """,
-            reply_markup=student_card
+            reply_markup=student_card,
         )
 
 
-@router.callback_query(F.data == 'set_mark')
-async def process_callback_previous_student(callback_query: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "set_mark")
+async def process_callback_previous_student(
+    callback_query: CallbackQuery, state: FSMContext
+):
     await callback_query.message.edit_text(
-        text='Какую оценку поставить',
-        reply_markup=mark_card
+        text="Какую оценку поставить", reply_markup=mark_card
     )
 
 
-@router.callback_query(F.data == 'set_mark_success')
-async def process_callback_set_mark_success(callback_query: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "set_mark_success")
+async def process_callback_set_mark_success(
+    callback_query: CallbackQuery, state: FSMContext
+):
     s = SheetWrapper(SAMPLE_SPREADSHEET_ID)
 
     state_date = await state.get_data()
-    curr_student = s.get_next_student(state_date['id'])
+    curr_student = s.get_next_student(state_date["id"])
 
-    s.increment_queue(state_date['id'])
-    s.mark_current_student(Mark.good, comment='Сдал')
+    s.increment_queue(state_date["id"])
+    s.mark_current_student(Mark.good, comment="Сдал")
 
     await callback_query.message.edit_text(
         text=f"""Студент оценен
@@ -90,19 +97,21 @@ async def process_callback_set_mark_success(callback_query: CallbackQuery, state
 Группа: {curr_student[2]}
 № Темы {curr_student[1]}
         """,
-        reply_markup=student_card
+        reply_markup=student_card,
     )
 
 
-@router.callback_query(F.data == 'set_mark_failed')
-async def process_callback_set_mark_failed(callback_query: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "set_mark_failed")
+async def process_callback_set_mark_failed(
+    callback_query: CallbackQuery, state: FSMContext
+):
     s = SheetWrapper(SAMPLE_SPREADSHEET_ID)
 
     state_date = await state.get_data()
-    curr_student = s.get_next_student(state_date['id'])
+    curr_student = s.get_next_student(state_date["id"])
 
-    s.increment_queue(state_date['id'])
-    s.mark_current_student(Mark.bad, comment='Не Сдал)')
+    s.increment_queue(state_date["id"])
+    s.mark_current_student(Mark.bad, comment="Не сдал")
 
     await callback_query.message.edit_text(
         text=f"""Студент оценен
@@ -110,5 +119,5 @@ async def process_callback_set_mark_failed(callback_query: CallbackQuery, state:
     Группа: {curr_student[2]}
     № Темы {curr_student[1]}
             """,
-        reply_markup=student_card
+        reply_markup=student_card,
     )
