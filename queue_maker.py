@@ -12,9 +12,9 @@ from errors import EmptyList
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-StudentAndTheme = tuple[str, str, str]
+StudentAndTheme = tuple[str, str, str]  # [Имя студента, Тема, Группа студента]
 COUNT_STUDENT_FIELDS = 3  # count str in StudentAndTheme
-RangeDict = dict[str, str]
+RangeDict = dict[str, str]  # Словарь с указанием диапазона
 
 
 class SheetWrapper:
@@ -52,8 +52,7 @@ class SheetWrapper:
 
     def get_sheet_lists_titles(self) -> list[str]:
         """
-        0 – first main list
-        :return:
+        Получить названия всех листов в таблице
         """
 
         spreadsheet = self.sheet.get(spreadsheetId=self.sheet_id).execute()
@@ -62,9 +61,18 @@ class SheetWrapper:
         return sheet_list
 
     def get_students_sheets(self):
+        """
+        Получить названия всех листов в таблице кроме первого (т.е. получить названия листов только со студентами
+        """
         return self.get_sheet_lists_titles()[1:]
 
     def get_students_from_list(self, list_title: str) -> list[StudentAndTheme]:
+        """
+        Получить всех студентов из листа
+
+        :param list_title:
+        :return:
+        """
         start_col, start_row = 0, self.start_row_idx
         end_col, end_row = 1, 100
         range = self._generate_range(start_col, start_row, end_col, end_row)
@@ -82,6 +90,12 @@ class SheetWrapper:
     def shuffle_students(
         self, list_groups: list[list[StudentAndTheme]]
     ) -> list[StudentAndTheme]:
+        """
+        Получает на вход список списков студентов и создаёт из них очередь путём перемешивания их
+
+        :param list_groups:
+        :return:
+        """
         queue: list[StudentAndTheme] = list()
 
         for current_students in itertools.zip_longest(*list_groups):
@@ -93,7 +107,12 @@ class SheetWrapper:
         return queue
 
     def write_queue(self, queue: list[StudentAndTheme]):
-        """Записывает очередь в табLицу"""
+        """
+        Записать очередь в таблицу (в 1й лист)
+
+        :param queue:
+        :return:
+        """
         print(f"Запись в лист {self.main_list_id}")
 
         start_col, start_row = 0, self.start_row_idx
@@ -117,6 +136,13 @@ class SheetWrapper:
         return result
 
     def mark_current_student(self, mark: Mark, comment: str = None):
+        """
+        Поставить отметку студенту, который сейчас идёт по очереди
+
+        :param mark: оценка, объект enum'а
+        :param comment: коммантарий, который будет записан в поле с оценкой (можно отсавить пустым)
+        :return:
+        """
         print(f"Запись в лист {self.main_list_id}")
 
         range = self._get_student_mark_range(self._student_num)
@@ -129,14 +155,32 @@ class SheetWrapper:
         self._update_cell_color(range, *color)
 
     def set_queue(self, idx=0):
+        """
+        Установить какой сейчас студент по счёту выступает
+
+        :param idx:
+        :return:
+        """
         self._student_num = idx
 
     def increment_queue(self):
+        """
+        Установить следующего студента выступающим
+
+        :return:
+        """
         self._student_num += 1
 
     ########################### range func ->
 
-    def _convert_to_a1(self, range, list_title=None):
+    def _convert_to_a1(self, range: RangeDict, list_title=None):
+        """
+        Конвертация дикта RangeDict в A1 нотацию
+
+        :param range:
+        :param list_title:
+        :return:
+        """
         s_col = int(range["startColumnIndex"])
         s_row = int(range["startRowIndex"])
         e_col = int(range["endColumnIndex"])
@@ -156,6 +200,12 @@ class SheetWrapper:
             return f"{range}"
 
     def _get_student_range(self, student_num) -> RangeDict:
+        """
+        Получает на вход номер студента и выдаёт диапазон ячеек, в котором он находится
+
+        :param student_num:
+        :return:
+        """
         start_row, end_row = (
             student_num + self.start_row_idx,
             student_num + self.start_row_idx,
@@ -165,6 +215,12 @@ class SheetWrapper:
         return self._generate_range(start_col, start_row, end_col, end_row)
 
     def _get_student_mark_range(self, student_num) -> RangeDict:
+        """
+        Получает на вход номер студента и выдаёт диапазон ячеек, в котором находитяс его поле с оценкой
+
+        :param student_num:
+        :return:
+        """
         start_row, end_row = (
             student_num + self.start_row_idx,
             student_num + self.start_row_idx + 1,
@@ -174,6 +230,15 @@ class SheetWrapper:
         return self._generate_range(start_col, start_row, end_col, end_row)
 
     def _generate_range(self, start_col, start_row, end_col, end_row) -> RangeDict:
+        """
+        Чисто метод по кайфу, создаёт объект RangeDict
+
+        :param start_col:
+        :param start_row:
+        :param end_col:
+        :param end_row:
+        :return:
+        """
         range = {
             "sheetId": self.main_list_id,
             "startColumnIndex": start_col,
@@ -188,6 +253,15 @@ class SheetWrapper:
     ########################### requests func ->
 
     def _update_cell_color(self, range: RangeDict, red, green, blue):
+        """
+        Обновляет цвет клетки(-ок) в range
+
+        :param range:
+        :param red:
+        :param green:
+        :param blue:
+        :return:
+        """
         self.sheet.batchUpdate(
             spreadsheetId=self.sheet_id,
             body={
@@ -211,17 +285,15 @@ class SheetWrapper:
             },
         ).execute()
 
-    def _gen_get_values_request(self, range: RangeDict, value) -> dict:
-        req = {
-            "updateCells": {
-                "range": range,
-                "rows": [[value]],
-                "fields": "userEnteredValue",
-            }
-        }
-        return req
-
     def _write_cells(self, range: RangeDict, value, is_single=True):
+        """
+        Записывает значения в клетки
+
+        :param range:
+        :param value:
+        :param is_single:
+        :return:
+        """
         if is_single:
             value = [[value]]
 
@@ -248,6 +320,13 @@ class SheetWrapper:
         return results
 
     def _read_cells(self, range: RangeDict, list_title: str = None) -> list:
+        """
+        Выдаёт значения клеток из range
+
+        :param range:
+        :param list_title:
+        :return:
+        """
         range = self._convert_to_a1(range, list_title=list_title)
 
         result = (
@@ -318,6 +397,7 @@ if __name__ == "__main__":
 
     # process imitation
     import random
+
     next_st = s.get_next_student()
     while next_st is not None:
         cur_st = next_st
