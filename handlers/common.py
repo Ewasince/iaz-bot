@@ -28,6 +28,7 @@ async def process_callback_init_queue(callback_query: CallbackQuery, state: FSMC
     s = SheetWrapper(SAMPLE_SPREADSHEET_ID)
 
     lists_with_students = s.get_students_sheets()
+    print(f"Список групп: {lists_with_students}")
 
     groups_list = []
 
@@ -36,6 +37,7 @@ async def process_callback_init_queue(callback_query: CallbackQuery, state: FSMC
             st_list = s.get_students_from_list(l)
 
         except EmptyList as e:
+            print(e)
             continue
 
         groups_list.append(st_list)

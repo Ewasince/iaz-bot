@@ -16,6 +16,7 @@ async def main() -> NoReturn:
         token = f.read()
 
     bot = Bot(token, parse_mode="HTML")
+    print(f"Бот запущен")
     await dp.start_polling(bot)
 
 

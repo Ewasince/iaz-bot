@@ -58,10 +58,12 @@ class SheetWrapper:
         """
         Получить названия всех листов в таблице
         """
+        print(f"[get_sheet_lists_titles] Получаю список листов")
 
         spreadsheet = self.sheet.get(spreadsheetId=self.sheet_id).execute()
         sheet_list = spreadsheet.get("sheets")
         sheet_list = [s["properties"]["title"] for s in sheet_list]
+        print(f"[get_sheet_lists_titles] Список листов: {sheet_list}")
         return sheet_list
 
     def get_students_sheets(self):
@@ -77,6 +79,7 @@ class SheetWrapper:
         :param list_title:
         :return:
         """
+        print(f"Получаю список студентов группы {list_title}")
         start_col, start_row = 0, self.start_row_idx
         end_col, end_row = 1, 100
         range = self._generate_range(start_col, start_row, end_col, end_row)
@@ -89,6 +92,7 @@ class SheetWrapper:
         # group -> g
         g = list_title
         result = [(s, t, g) for s, t in result]
+        print(f"Количество студентов в группе {len(result)}")
 
         return result
 
@@ -118,7 +122,7 @@ class SheetWrapper:
         :param queue:
         :return:
         """
-        print(f"Запись в лист {self.main_list_id}")
+        print(f"[write_queue] Запись в лист {self.main_list_id}")
 
         start_col, start_row = 0, self.start_row_idx
         end_col, end_row = COUNT_STUDENT_FIELDS, len(queue) + self.start_row_idx
@@ -126,6 +130,8 @@ class SheetWrapper:
         range = self._generate_range(start_col, start_row, end_col, end_row)
 
         self._write_cells(range, queue, is_single=False)
+        print(f"[write_queue] Записано в лист {self.main_list_id}")
+
 
     def get_next_student(self, offset: int = 0) -> StudentAndTheme | None:
         student_num = self._student_num + offset
