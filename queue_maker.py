@@ -12,6 +12,8 @@ from errors import EmptyList
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SECRETS_DIR = "secrets"
+with open(os.path.join(SECRETS_DIR, 'table_id.txt')) as f:
+    SAMPLE_SPREADSHEET_ID = f.read()
 
 
 StudentAndTheme = tuple[str, str, str]  # [Имя студента, Тема, Группа студента]
@@ -354,8 +356,6 @@ class SheetWrapper:
 
 
 if __name__ == "__main__":
-    SAMPLE_SPREADSHEET_ID = "120kLLJRpbZjQofJuPbbB-VtvebMQzG6GLBV24FZGO58"
-
     s = SheetWrapper(SAMPLE_SPREADSHEET_ID)
 
     lists_with_students = s.get_students_sheets()

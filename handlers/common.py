@@ -6,12 +6,9 @@ from aiogram.types import Message, CallbackQuery
 from errors import EmptyList
 from keyboards.main_menu import main_markup
 from keyboards.student import student_card
-from queue_maker import SheetWrapper
-from states import States
+from queue_maker import SheetWrapper, SAMPLE_SPREADSHEET_ID
 
 router = Router()
-SAMPLE_SPREADSHEET_ID = "120kLLJRpbZjQofJuPbbB-VtvebMQzG6GLBV24FZGO58"
-
 
 @router.message(Command(commands=["start"]))
 async def command_start_handler(message: Message, state: FSMContext) -> None:

@@ -1,16 +1,13 @@
 from aiogram import Router, F
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
 
 from keyboards.main_menu import main_markup
 from keyboards.student import student_card, mark_card
-from queue_maker import SheetWrapper
+from queue_maker import SheetWrapper, SAMPLE_SPREADSHEET_ID
 from enums import Mark
 
 router = Router()
-SAMPLE_SPREADSHEET_ID = "120kLLJRpbZjQofJuPbbB-VtvebMQzG6GLBV24FZGO58"
-
 
 @router.callback_query(F.data == "next_student")
 async def process_callback_next_student(
