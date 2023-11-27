@@ -82,6 +82,7 @@ class SheetWrapper:
         range = self._generate_range(start_col, start_row, end_col, end_row)
 
         result = self._read_cells(range, list_title=list_title)
+        result = (r for r in result if len(r) >= 2)
 
         # student -> s
         # theme -> t
